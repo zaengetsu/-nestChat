@@ -26,14 +26,14 @@ const Message = ({ content, username, color, isCurrentUser, timestamp }: Message
     <div className={`mb-4 flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
       <div className={`max-w-[70%] rounded-lg px-4 py-2 ${isCurrentUser ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}>
         <div className="flex items-center">
-          <span className="font-semibold" style={{ color: isCurrentUser ? 'white' : color }}>
+          <span className="font-semibold text-gray-900">
             {username}
           </span>
           <span className="ml-2 text-xs" style={{ color: isCurrentUser ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.6)' }}>
             {formattedTime}
           </span>
         </div>
-        <p className="mt-1" style={{ color: isCurrentUser ? 'white' : 'black' }}>{content}</p>
+        <p className="mt-1" style={{ color: isCurrentUser ? 'white' : color }}>{content}</p>
       </div>
     </div>
   );
@@ -58,7 +58,7 @@ const UserList = ({ users }: { users: User[] }) => {
   );
 };
 
-const ColorPicker = ({ onColorChange }: { onColorChange: (color: string) => void }) => {
+const ColorPicker = ({ onColorChange, usedColors }: { onColorChange: (color: string) => void, usedColors: string[] }) => {
   const colors = [
     { id: 'red', value: '#FF5733' },
     { id: 'green', value: '#33FF57' },
@@ -76,15 +76,21 @@ const ColorPicker = ({ onColorChange }: { onColorChange: (color: string) => void
 
   return (
     <div className="mb-4 flex flex-wrap gap-2">
-      {colors.map((color) => (
-        <button
-          key={color.id}
-          className="h-6 w-6 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          style={{ backgroundColor: color.value }}
-          onClick={() => onColorChange(color.value)}
-          title={color.id}
-        />
-      ))}
+      {colors.map((color) => {
+        const isUsed = usedColors.includes(color.value);
+        return (
+          <button
+            key={color.id}
+            className={`h-6 w-6 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              isUsed ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+            }`}
+            style={{ backgroundColor: color.value }}
+            onClick={() => !isUsed && onColorChange(color.value)}
+            title={isUsed ? `${color.id} (déjà utilisé)` : color.id}
+            disabled={isUsed}
+          />
+        );
+      })}
     </div>
   );
 };
@@ -96,6 +102,9 @@ export default function Chat() {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  // Récupérer toutes les couleurs utilisées
+  const usedColors = Array.from(new Set(connectedUsers.map(u => u.color)));
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -142,7 +151,7 @@ export default function Chat() {
   return (
     <div className="flex h-screen flex-col">
       <header className="flex items-center justify-between border-b border-gray-200 bg-white p-4 shadow-sm">
-        <h1 className="text-2xl font-bold text-gray-900">Nest Chat</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Nest Chat [{user.username}]</h1>
         <div className="flex items-center space-x-4">
           <div className="flex items-center">
             <div
@@ -165,7 +174,7 @@ export default function Chat() {
       {showColorPicker && (
         <div className="absolute right-4 top-16 z-10 rounded-md border border-gray-200 bg-white p-3 shadow-lg">
           <h3 className="mb-2 text-lg font-semibold text-gray-900">Choisir une couleur</h3>
-          <ColorPicker onColorChange={handleColorChange} />
+          <ColorPicker onColorChange={handleColorChange} usedColors={usedColors} />
         </div>
       )}
 
