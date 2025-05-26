@@ -24,14 +24,16 @@ const Message = ({ content, username, color, isCurrentUser, timestamp }: Message
   
   return (
     <div className={`mb-4 flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
-      <div className={`max-w-[70%] rounded-lg px-4 py-2 ${isCurrentUser ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}>
+      <div className={`max-w-[70%] rounded-lg px-4 py-2 ${isCurrentUser ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}>
         <div className="flex items-center">
-          <span className="font-medium" style={{ color: isCurrentUser ? 'white' : color }}>
+          <span className="font-semibold" style={{ color: isCurrentUser ? 'white' : color }}>
             {username}
           </span>
-          <span className="ml-2 text-xs opacity-70">{formattedTime}</span>
+          <span className="ml-2 text-xs" style={{ color: isCurrentUser ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.6)' }}>
+            {formattedTime}
+          </span>
         </div>
-        <p className="mt-1">{content}</p>
+        <p className="mt-1" style={{ color: isCurrentUser ? 'white' : 'black' }}>{content}</p>
       </div>
     </div>
   );
@@ -40,7 +42,7 @@ const Message = ({ content, username, color, isCurrentUser, timestamp }: Message
 const UserList = ({ users }: { users: User[] }) => {
   return (
     <div className="h-full w-64 border-l border-gray-200 bg-white p-4">
-      <h2 className="mb-4 font-bold">Utilisateurs en ligne ({users.length})</h2>
+      <h2 className="mb-4 text-lg font-bold text-gray-800">Utilisateurs en ligne ({users.length})</h2>
       <ul className="space-y-2">
         {users.map((user) => (
           <li key={user.id} className="flex items-center">
@@ -48,7 +50,7 @@ const UserList = ({ users }: { users: User[] }) => {
               className="mr-2 h-3 w-3 rounded-full"
               style={{ backgroundColor: user.color }}
             ></div>
-            <span>{user.username}</span>
+            <span className="font-medium text-gray-800">{user.username}</span>
           </li>
         ))}
       </ul>
@@ -88,7 +90,7 @@ const ColorPicker = ({ onColorChange }: { onColorChange: (color: string) => void
 };
 
 export default function Chat() {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
   const { messages, connectedUsers, sendMessage, updateColor } = useChat();
   const [messageInput, setMessageInput] = useState('');
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -96,10 +98,10 @@ export default function Chat() {
   const router = useRouter();
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isLoading && !isAuthenticated) {
       router.push('/login');
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, isLoading, router]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -122,14 +124,25 @@ export default function Chat() {
     setShowColorPicker(false);
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
+          <p className="text-gray-600">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!isAuthenticated || !user) {
-    return <div>Chargement...</div>;
+    return null;
   }
 
   return (
     <div className="flex h-screen flex-col">
       <header className="flex items-center justify-between border-b border-gray-200 bg-white p-4 shadow-sm">
-        <h1 className="text-xl font-bold">Nest Chat</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Nest Chat</h1>
         <div className="flex items-center space-x-4">
           <div className="flex items-center">
             <div
@@ -138,7 +151,7 @@ export default function Chat() {
               onClick={() => setShowColorPicker(!showColorPicker)}
               title="Changer de couleur"
             ></div>
-            <span>{user.username}</span>
+            <span className="font-semibold text-gray-900">{user.username}</span>
           </div>
           <button
             onClick={logout}
@@ -151,7 +164,7 @@ export default function Chat() {
 
       {showColorPicker && (
         <div className="absolute right-4 top-16 z-10 rounded-md border border-gray-200 bg-white p-3 shadow-lg">
-          <h3 className="mb-2 font-medium">Choisir une couleur</h3>
+          <h3 className="mb-2 text-lg font-semibold text-gray-900">Choisir une couleur</h3>
           <ColorPicker onColorChange={handleColorChange} />
         </div>
       )}
@@ -179,7 +192,7 @@ export default function Chat() {
                 value={messageInput}
                 onChange={(e) => setMessageInput(e.target.value)}
                 placeholder="Écrivez votre message..."
-                className="flex-1 rounded-l-md border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                className="flex-1 rounded-l-md border border-gray-300 bg-white px-4 py-2 text-base text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-blue-500"
               />
               <button
                 type="submit"

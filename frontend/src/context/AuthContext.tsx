@@ -16,6 +16,7 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
+  isLoading: boolean;
   login: (username: string, password: string) => Promise<void>;
   register: (email: string, username: string, password: string) => Promise<void>;
   logout: () => void;
@@ -27,44 +28,55 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
     // Vérifier si l'utilisateur est déjà connecté au chargement
     const checkAuth = async () => {
-      const storedToken = localStorage.getItem('token');
-      const storedUser = localStorage.getItem('user');
-      
-      if (storedToken && storedUser) {
-        try {
-          // Le token est déjà stocké avec le préfixe Bearer
-          await authApi.verifyToken(storedToken);
-          
-          setToken(storedToken);
-          setUser(JSON.parse(storedUser));
-          setIsAuthenticated(true);
-        } catch (error) {
-          console.error('Token invalide:', error);
-          // Si le token est invalide, déconnecter l'utilisateur
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          setToken(null);
-          setUser(null);
+      try {
+        const storedToken = localStorage.getItem('token');
+        const storedUser = localStorage.getItem('user');
+        
+        if (storedToken && storedUser) {
+          try {
+            // Vérifier si le token est valide
+            await authApi.verifyToken(storedToken);
+            
+            // Mettre à jour l'état avec les données stockées
+            setToken(storedToken);
+            setUser(JSON.parse(storedUser));
+            setIsAuthenticated(true);
+            
+            // Si on est sur la page de login ou register, rediriger vers le chat
+            if (window.location.pathname === '/login' || window.location.pathname === '/register') {
+              router.push('/chat');
+            }
+          } catch (error) {
+            console.error('Token invalide:', error);
+            // Si le token est invalide, déconnecter l'utilisateur
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            setToken(null);
+            setUser(null);
+            setIsAuthenticated(false);
+            router.push('/login');
+          }
+        } else {
+          // Si pas de token ou user dans le localStorage
           setIsAuthenticated(false);
-          router.push('/login');
+          if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+            router.push('/login');
+          }
         }
+      } finally {
+        // Une fois la vérification terminée, on indique que le chargement est terminé
+        setIsLoading(false);
       }
     };
 
     checkAuth();
-  }, []);
-
-  // Ajouter un effet séparé pour la redirection
-  useEffect(() => {
-    if (!isAuthenticated && window.location.pathname !== '/login' && window.location.pathname !== '/register') {
-      router.push('/login');
-    }
-  }, [isAuthenticated, router]);
+  }, [router]);
 
   const login = async (username: string, password: string) => {
     try {
@@ -73,11 +85,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       // Vérifier la structure de la réponse
       if (!response || !response.access_token) {
+        console.error('Format de réponse invalide:', response);
         throw new Error('Format de réponse invalide');
       }
 
       // Créer le token avec le préfixe Bearer
       const tokenWithBearer = `Bearer ${response.access_token}`;
+      console.log('Token avec Bearer:', tokenWithBearer); // Debug log
       
       // Stocker le token et l'utilisateur dans localStorage
       localStorage.setItem('token', tokenWithBearer);
@@ -91,8 +105,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       router.push('/chat');
       
       return response;
-    } catch (error) {
-      console.error('Erreur de connexion:', error);
+    } catch (error: any) {
+      console.error('Erreur de connexion détaillée:', error);
+      if (error.response) {
+        console.error('Réponse du serveur:', error.response.data);
+        console.error('Status:', error.response.status);
+      }
       toast.error('Échec de la connexion. Vérifiez vos identifiants.');
       throw error;
     }
@@ -137,7 +155,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isAuthenticated, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, isAuthenticated, isLoading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -140,13 +140,11 @@ export class CsvService implements OnModuleInit {
     const dataLines = lines.slice(1);
     
     const loadedMessages = dataLines.map(line => {
-      // Utiliser une regex pour gérer correctement les virgules échappées
-      const matches = line.match(/^([^,]+),(.*),([^,]+),([^,]+)$/);
-      if (!matches) {
+      const [id, content, createdAt, userId] = line.split(',');
+      if (!id || !content || !createdAt || !userId) {
         this.logger.warn(`Ligne de message invalide ignorée: ${line}`);
         return null;
       }
-      const [_, id, content, createdAt, userId] = matches;
       return { 
         id, 
         content: content.replace(/\\,/g, ','), // Restaurer les virgules échappées
@@ -165,8 +163,8 @@ export class CsvService implements OnModuleInit {
     let content = 'id,content,createdAt,userId\n';
     
     this.messages.forEach(message => {
-      // Échapper les virgules dans le contenu du message en les entourant de guillemets
-      const escapedContent = `"${message.content.replace(/"/g, '""')}"`;
+      // Échapper les virgules dans le contenu du message
+      const escapedContent = message.content.replace(/,/g, '\\,');
       content += `${message.id},${escapedContent},${message.createdAt},${message.userId}\n`;
     });
     
@@ -215,9 +213,9 @@ export class CsvService implements OnModuleInit {
   }
 
   async getMessages(limit = 50): Promise<(Message & { user: any })[]> {
-    // Trier les messages par date (du plus récent au plus ancien)
+    // Trier les messages par date (du plus ancien au plus récent)
     const sortedMessages = [...this.messages].sort((a, b) => 
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
     );
     
     // Limiter le nombre de messages
