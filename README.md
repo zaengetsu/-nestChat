@@ -11,20 +11,29 @@ Cette application est un chat en temps réel développé avec NestJS pour le bac
 - Stockage des données dans des fichiers CSV
 
 ## Prérequis
-- Docker et Docker Compose installés sur votre machine
+- Node.js (version 18 ou supérieure)
+- npm (version 9 ou supérieure)
 
 ## Installation et lancement
 
-1. Décompressez l'archive ZIP dans un dossier de votre choix
-2. Ouvrez un terminal dans le dossier racine du projet
-3. Lancez l'application avec la commande suivante :
+1. Clonez le repository dans un dossier de votre choix
+2. Ouvrez deux terminaux dans le dossier racine du projet
 
+### Backend (NestJS)
 ```bash
-docker-compose up
+cd backend
+npm install
+npm run start:dev
 ```
 
-4. Attendez que les services démarrent (cela peut prendre quelques instants)
-5. Accédez à l'application dans votre navigateur :
+### Frontend (NextJS)
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+3. Accédez à l'application dans votre navigateur :
    - Frontend : http://localhost:3001
    - Backend API : http://localhost:3000
 
@@ -38,10 +47,8 @@ docker-compose up
 ## Structure du projet
 - `/backend` : API NestJS avec authentification et websockets
 - `/frontend` : Interface utilisateur NextJS
-- `/docker-compose.yml` : Configuration Docker pour le déploiement
 
 ## Technologies utilisées
 - Backend : NestJS, WebSockets, JWT
 - Frontend : NextJS, React, TailwindCSS
 - Stockage : Fichiers CSV
-- Déploiement : Docker, Docker Compose
