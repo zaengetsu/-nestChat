@@ -1,0 +1,30 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:../database.db"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  username  String   @unique
+  password  String
+  color     String   @default("#1E90FF") // Couleur par défaut (bleu)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  messages  Message[]
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  content   String
+  createdAt DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+}
