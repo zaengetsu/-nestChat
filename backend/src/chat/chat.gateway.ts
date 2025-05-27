@@ -13,9 +13,15 @@ import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import { Logger } from '@nestjs/common';
 
+interface ConnectedUser {
+  username: string;
+  color: string;
+  socket: Socket;
+}
+
 @WebSocketGateway({
   cors: {
-    origin: true,
+    origin: 'http://localhost:3001',
     credentials: true,
     methods: ['GET', 'POST'],
     allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
@@ -23,7 +29,7 @@ import { Logger } from '@nestjs/common';
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(ChatGateway.name);
-  private connectedUsers = new Map<string, { socket: Socket; user: any }>();
+  private connectedUsers: Map<string, ConnectedUser> = new Map();
 
   @WebSocketServer()
   server: Server;
@@ -60,7 +66,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         // Vérifier si l'utilisateur est déjà connecté
         const existingConnection = Array.from(this.connectedUsers.entries())
-          .find(([_, info]) => info.user.id === user.id);
+          .find(([_, info]) => info.username === user.username);
 
         if (existingConnection) {
           // Déconnecter l'ancienne connexion
@@ -71,11 +77,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
         this.connectedUsers.set(client.id, { 
           socket: client, 
-          user: {
-            id: user.id,
-            username: user.username,
-            color: user.color,
-          }
+          username: user.username,
+          color: user.color,
         });
 
         // Envoyer la liste des utilisateurs connectés à tous les clients
@@ -102,6 +105,29 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.logger.log(`Client déconnecté: ${client.id}`);
   }
 
+  @SubscribeMessage('messageSeen')
+  async handleMessageSeen(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { messageId: string },
+  ) {
+    try {
+      const userInfo = this.connectedUsers.get(client.id);
+      if (!userInfo) {
+        this.logger.error(`Utilisateur non trouvé pour le client ${client.id}`);
+        return;
+      }
+
+      this.logger.log(`Message ${data.messageId} vu par ${userInfo.username}`);
+      this.server.emit('messageSeen', {
+        messageId: data.messageId,
+        username: userInfo.username
+      });
+    } catch (error) {
+      this.logger.error(`Erreur de marquage de message vu: ${error.message}`);
+      client.emit('error', { message: 'Erreur lors du marquage du message comme vu' });
+    }
+  }
+
   @SubscribeMessage('sendMessage')
   async handleMessage(
     @ConnectedSocket() client: Socket,
@@ -117,17 +143,30 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         return;
       }
 
-      this.logger.log(`Création du message pour l'utilisateur ${userInfo.user.id}`);
+      // Récupérer l'utilisateur complet pour avoir son ID
+      const user = await this.usersService.findByUsername(userInfo.username);
+      if (!user) {
+        this.logger.error(`Utilisateur non trouvé dans la base de données: ${userInfo.username}`);
+        return;
+      }
+
+      this.logger.log(`Création du message pour l'utilisateur ${userInfo.username}`);
       const message = await this.chatService.createMessage(
         data.content,
-        userInfo.user.id,
+        user.id,
       );
 
-      this.logger.log(`Message créé avec succès: ${JSON.stringify(message)}`);
-      this.server.emit('newMessage', message);
+      // Ajouter le champ seenBy au message (sans l'expéditeur)
+      const messageWithSeenBy = {
+        ...message,
+        seenBy: [] // On ne met plus l'expéditeur dans la liste des vus
+      };
+
+      this.logger.log(`Message créé avec succès: ${JSON.stringify(messageWithSeenBy)}`);
+      this.server.emit('newMessage', messageWithSeenBy);
       this.logger.log('Message diffusé à tous les clients');
       
-      return message;
+      return messageWithSeenBy;
     } catch (error) {
       this.logger.error(`Erreur d'envoi de message: ${error.message}`);
       client.emit('error', { message: 'Erreur lors de l\'envoi du message' });
@@ -147,13 +186,20 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         return;
       }
 
-      this.logger.log(`Mise à jour de la couleur pour l'utilisateur ${userInfo.user.id}: ${data.color}`);
+      this.logger.log(`Mise à jour de la couleur pour l'utilisateur ${userInfo.username}: ${data.color}`);
       
+      // Récupérer l'utilisateur complet pour avoir son ID
+      const user = await this.usersService.findByUsername(userInfo.username);
+      if (!user) {
+        this.logger.error(`Utilisateur non trouvé dans la base de données: ${userInfo.username}`);
+        return;
+      }
+
       // Mettre à jour la couleur dans la base de données
-      await this.usersService.updateColor(userInfo.user.id, data.color);
+      await this.usersService.updateColor(user.id, data.color);
       
       // Mettre à jour la couleur dans la Map des utilisateurs connectés
-      userInfo.user.color = data.color;
+      userInfo.color = data.color;
       
       // Diffuser la liste mise à jour des utilisateurs
       this.updateConnectedUsersList();
@@ -165,8 +211,17 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  private updateConnectedUsersList() {
-    const users = Array.from(this.connectedUsers.values()).map(({ user }) => user);
+  private async updateConnectedUsersList() {
+    const users = await Promise.all(
+      Array.from(this.connectedUsers.values()).map(async ({ username, color }) => {
+        const user = await this.usersService.findByUsername(username);
+        return {
+          id: user?.id || '',
+          username,
+          color
+        };
+      })
+    );
     this.server.emit('connectedUsers', users);
   }
 }

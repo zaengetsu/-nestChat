@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import toast from 'react-hot-toast';
@@ -9,12 +9,12 @@ interface Message {
   id: string;
   content: string;
   createdAt: string;
-  userId: string;
   user: {
     id: string;
     username: string;
     color: string;
   };
+  seenBy: string[];
 }
 
 interface ConnectedUser {
@@ -28,12 +28,12 @@ interface ChatContextType {
   messages: Message[];
   connectedUsers: ConnectedUser[];
   sendMessage: (content: string) => void;
-  updateColor: (color: string) => void;
+  updateColor: (color: string, onUserUpdate?: (user: any) => void) => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
-export const ChatProvider = ({ children }: { children: ReactNode }) => {
+export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [connectedUsers, setConnectedUsers] = useState<ConnectedUser[]>([]);
@@ -83,12 +83,9 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
 
     socketInstance.on('newMessage', (message: Message) => {
       console.log('Nouveau message reçu:', message);
-      setMessages((prev) => {
-        console.log('Messages précédents:', prev);
-        const newMessages = [...prev, message];
-        console.log('Nouveaux messages:', newMessages);
-        return newMessages;
-      });
+      setMessages(prev => [...prev, message]);
+      // Marquer le message comme vu
+      socketInstance.emit('messageSeen', { messageId: message.id });
     });
 
     socketInstance.on('connectedUsers', (users: ConnectedUser[]) => {
@@ -107,6 +104,14 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
       }
     });
 
+    socketInstance.on('messageSeen', ({ messageId, username }) => {
+      setMessages(prev => prev.map(msg => 
+        msg.id === messageId 
+          ? { ...msg, seenBy: [...(msg.seenBy || []), username] }
+          : msg
+      ));
+    });
+
     return () => {
       socketInstance.disconnect();
     };
@@ -119,7 +124,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const updateColor = (color: string) => {
+  const updateColor = (color: string, onUserUpdate?: (user: any) => void) => {
     if (socket && color) {
       console.log('Mise à jour de la couleur:', color);
       socket.emit('updateColor', { color });
@@ -130,7 +135,26 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
         const user = JSON.parse(storedUser);
         user.color = color;
         localStorage.setItem('user', JSON.stringify(user));
+        
+        // Mettre à jour la couleur dans tous les messages de l'utilisateur
+        setMessages(prevMessages => 
+          prevMessages.map(msg => 
+            msg.user.id === user.id 
+              ? { ...msg, user: { ...msg.user, color } }
+              : msg
+          )
+        );
+        
+        // Appeler la fonction de mise à jour si elle existe
+        if (onUserUpdate) {
+          onUserUpdate(user);
+        }
       }
+
+      // Écouter la confirmation du serveur
+      socket.once('connectedUsers', (users) => {
+        console.log('Liste des utilisateurs mise à jour après changement de couleur:', users);
+      });
     }
   };
 

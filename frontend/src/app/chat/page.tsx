@@ -19,37 +19,53 @@ interface User {
   color: string;
 }
 
+interface ConnectedUser {
+  id: string;
+  username: string;
+  color: string;
+}
+
 const Message = ({ content, username, color, isCurrentUser, timestamp }: MessageProps) => {
   const formattedTime = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   
   return (
     <div className={`mb-4 flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
-      <div className={`max-w-[70%] rounded-lg px-4 py-2 ${isCurrentUser ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}>
-        <div className="flex items-center">
-          <span className="font-semibold text-gray-900">
+      <div 
+        className={`max-w-[70%] rounded-lg px-4 py-2 shadow-sm ${
+          isCurrentUser 
+            ? 'bg-blue-500 text-white' 
+            : 'bg-white border border-gray-200'
+        }`}
+      >
+        <div className="flex items-center gap-2">
+          <span className={`font-semibold ${isCurrentUser ? 'text-white' : 'text-gray-900'}`}>
             {username}
           </span>
-          <span className="ml-2 text-xs" style={{ color: isCurrentUser ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.6)' }}>
+          <span className="text-xs opacity-75">
             {formattedTime}
           </span>
         </div>
-        <p className="mt-1" style={{ color: isCurrentUser ? 'white' : color }}>{content}</p>
+        <p className="mt-1 break-words" style={{ color: isCurrentUser ? 'white' : color }}>
+          {content}
+        </p>
       </div>
     </div>
   );
 };
 
-const UserList = ({ users }: { users: User[] }) => {
+const UserList = ({ users }: { users: ConnectedUser[] }) => {
   return (
-    <div className="h-full w-64 border-l border-gray-200 bg-white p-4">
-      <h2 className="mb-4 text-lg font-bold text-gray-800">Utilisateurs en ligne ({users.length})</h2>
-      <ul className="space-y-2">
+    <div className="h-full w-72 border-l border-gray-200 bg-white p-4">
+      <h2 className="mb-4 text-lg font-bold text-gray-800">
+        Utilisateurs en ligne ({users.length})
+      </h2>
+      <ul className="space-y-3">
         {users.map((user) => (
-          <li key={user.id} className="flex items-center">
+          <li key={user.id} className="flex items-center rounded-lg p-2 hover:bg-gray-50">
             <div
-              className="mr-2 h-3 w-3 rounded-full"
+              className="mr-3 h-4 w-4 rounded-full border border-gray-200"
               style={{ backgroundColor: user.color }}
-            ></div>
+            />
             <span className="font-medium text-gray-800">{user.username}</span>
           </li>
         ))}
@@ -75,14 +91,14 @@ const ColorPicker = ({ onColorChange, usedColors }: { onColorChange: (color: str
   ];
 
   return (
-    <div className="mb-4 flex flex-wrap gap-2">
+    <div className="grid grid-cols-6 gap-2 p-2">
       {colors.map((color) => {
         const isUsed = usedColors.includes(color.value);
         return (
           <button
             key={color.id}
-            className={`h-6 w-6 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              isUsed ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+            className={`h-8 w-8 rounded-full border-2 transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              isUsed ? 'opacity-50 cursor-not-allowed border-gray-300' : 'cursor-pointer border-white'
             }`}
             style={{ backgroundColor: color.value }}
             onClick={() => !isUsed && onColorChange(color.value)}
@@ -96,7 +112,7 @@ const ColorPicker = ({ onColorChange, usedColors }: { onColorChange: (color: str
 };
 
 export default function Chat() {
-  const { user, isAuthenticated, isLoading, logout } = useAuth();
+  const { user, isAuthenticated, isLoading, logout, updateUser } = useAuth();
   const { messages, connectedUsers, sendMessage, updateColor } = useChat();
   const [messageInput, setMessageInput] = useState('');
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -116,10 +132,6 @@ export default function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  useEffect(() => {
-    console.log('Messages dans le composant Chat:', messages);
-  }, [messages]);
-
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (messageInput.trim()) {
@@ -129,8 +141,13 @@ export default function Chat() {
   };
 
   const handleColorChange = (color: string) => {
-    updateColor(color);
-    setShowColorPicker(false);
+    if (user) {
+      updateColor(color, (updatedUser) => {
+        const newUser = { ...user, color };
+        updateUser(newUser);
+      });
+      setShowColorPicker(false);
+    }
   };
 
   if (isLoading) {
@@ -149,22 +166,25 @@ export default function Chat() {
   }
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-screen flex-col bg-gray-50">
       <header className="flex items-center justify-between border-b border-gray-200 bg-white p-4 shadow-sm">
-        <h1 className="text-2xl font-bold text-gray-900">Nest Chat [{user.username}]</h1>
-        <div className="flex items-center space-x-4">
+        <h1 className="text-2xl font-bold text-gray-900">Nest Chat</h1>
+        <div className="flex items-center space-x-6">
           <div className="flex items-center">
-            <div
-              className="mr-2 h-3 w-3 rounded-full cursor-pointer"
-              style={{ backgroundColor: user.color }}
+            <button
+              className="group flex items-center gap-2 rounded-full px-3 py-2 hover:bg-gray-100"
               onClick={() => setShowColorPicker(!showColorPicker)}
-              title="Changer de couleur"
-            ></div>
-            <span className="font-semibold text-gray-900">{user.username}</span>
+            >
+              <div
+                className="h-4 w-4 rounded-full border border-gray-200 transition-transform group-hover:scale-110"
+                style={{ backgroundColor: user.color }}
+              />
+              <span className="font-medium text-gray-900">{user.username}</span>
+            </button>
           </div>
           <button
             onClick={logout}
-            className="rounded bg-red-500 px-3 py-1 text-white hover:bg-red-600"
+            className="rounded-lg bg-red-500 px-4 py-2 text-white transition-colors hover:bg-red-600"
           >
             Déconnexion
           </button>
@@ -172,8 +192,10 @@ export default function Chat() {
       </header>
 
       {showColorPicker && (
-        <div className="absolute right-4 top-16 z-10 rounded-md border border-gray-200 bg-white p-3 shadow-lg">
-          <h3 className="mb-2 text-lg font-semibold text-gray-900">Choisir une couleur</h3>
+        <div className="absolute right-4 top-16 z-10 rounded-lg border border-gray-200 bg-white shadow-lg">
+          <div className="border-b border-gray-200 p-3">
+            <h3 className="text-lg font-semibold text-gray-900">Choisir une couleur</h3>
+          </div>
           <ColorPicker onColorChange={handleColorChange} usedColors={usedColors} />
         </div>
       )}
@@ -194,18 +216,18 @@ export default function Chat() {
             <div ref={messagesEndRef} />
           </div>
 
-          <form onSubmit={handleSendMessage} className="border-t border-gray-200 p-4">
-            <div className="flex">
+          <form onSubmit={handleSendMessage} className="border-t border-gray-200 bg-white p-4">
+            <div className="flex gap-2">
               <input
                 type="text"
                 value={messageInput}
                 onChange={(e) => setMessageInput(e.target.value)}
                 placeholder="Écrivez votre message..."
-                className="flex-1 rounded-l-md border border-gray-300 bg-white px-4 py-2 text-base text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-base text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
               <button
                 type="submit"
-                className="rounded-r-md bg-blue-500 px-4 py-2 text-white hover:bg-blue-600"
+                className="rounded-lg bg-blue-500 px-6 py-2 font-medium text-white transition-colors hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               >
                 Envoyer
               </button>

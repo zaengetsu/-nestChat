@@ -169,7 +169,7 @@ export class CsvService implements OnModuleInit {
     });
     
     try {
-      fs.writeFileSync(this.messagesFilePath, content);
+    fs.writeFileSync(this.messagesFilePath, content);
       this.logger.log('Messages sauvegardés avec succès');
     } catch (error) {
       this.logger.error(`Erreur lors de la sauvegarde des messages: ${error.message}`);
