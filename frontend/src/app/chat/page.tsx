@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '@/context/ChatContext';
 import { useRouter } from 'next/navigation';
+import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 
 interface MessageProps {
   content: string;
@@ -11,6 +12,8 @@ interface MessageProps {
   color: string;
   isCurrentUser: boolean;
   timestamp: string;
+  seenBy: string[];
+  isLastMessage: boolean;
 }
 
 interface User {
@@ -25,8 +28,11 @@ interface ConnectedUser {
   color: string;
 }
 
-const Message = ({ content, username, color, isCurrentUser, timestamp }: MessageProps) => {
+const Message = ({ content, username, color, isCurrentUser, timestamp, seenBy, isLastMessage }: MessageProps) => {
   const formattedTime = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  
+  // Filtrer les vus pour éliminer les doublons et l'expéditeur
+  const uniqueSeenBy = Array.from(new Set(seenBy)).filter(viewer => viewer !== username);
   
   return (
     <div className={`mb-4 flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
@@ -48,6 +54,11 @@ const Message = ({ content, username, color, isCurrentUser, timestamp }: Message
         <p className="mt-1 break-words" style={{ color: isCurrentUser ? 'white' : color }}>
           {content}
         </p>
+        {isCurrentUser && isLastMessage && uniqueSeenBy.length > 0 && (
+          <div className="mt-1 text-xs" style={{ color: isCurrentUser ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.6)' }}>
+            Vu par: {uniqueSeenBy.join(', ')}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -116,8 +127,15 @@ export default function Chat() {
   const { messages, connectedUsers, sendMessage, updateColor } = useChat();
   const [messageInput, setMessageInput] = useState('');
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  // Trouver le dernier message de chaque utilisateur
+  const lastMessageByUser = new Map<string, string>();
+  messages.forEach(message => {
+    lastMessageByUser.set(message.user.username, message.id);
+  });
 
   // Récupérer toutes les couleurs utilisées
   const usedColors = Array.from(new Set(connectedUsers.map(u => u.color)));
@@ -132,11 +150,19 @@ export default function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage(e);
+    }
+  };
+
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (messageInput.trim()) {
       sendMessage(messageInput);
       setMessageInput('');
+      setShowEmojiPicker(false);
     }
   };
 
@@ -148,6 +174,10 @@ export default function Chat() {
       });
       setShowColorPicker(false);
     }
+  };
+
+  const handleEmojiClick = (emojiData: EmojiClickData) => {
+    setMessageInput(prev => prev + emojiData.emoji);
   };
 
   if (isLoading) {
@@ -167,6 +197,11 @@ export default function Chat() {
 
   return (
     <div className="flex h-screen flex-col bg-gray-50">
+      <style jsx global>{`
+        [data-nextjs-dev-tools-button] {
+          display: none !important;
+        }
+      `}</style>
       <header className="flex items-center justify-between border-b border-gray-200 bg-white p-4 shadow-sm">
         <h1 className="text-2xl font-bold text-gray-900">Nest Chat</h1>
         <div className="flex items-center space-x-6">
@@ -211,17 +246,32 @@ export default function Chat() {
                 color={message.user.color}
                 isCurrentUser={message.user.id === user.id}
                 timestamp={message.createdAt}
+                seenBy={message.seenBy || []}
+                isLastMessage={lastMessageByUser.get(message.user.username) === message.id}
               />
             ))}
             <div ref={messagesEndRef} />
           </div>
 
           <form onSubmit={handleSendMessage} className="border-t border-gray-200 bg-white p-4">
-            <div className="flex gap-2">
+            <div className="relative flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-500 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                😊
+              </button>
+              {showEmojiPicker && (
+                <div className="absolute bottom-12 left-0 z-50">
+                  <EmojiPicker onEmojiClick={handleEmojiClick} />
+                </div>
+              )}
               <input
                 type="text"
                 value={messageInput}
                 onChange={(e) => setMessageInput(e.target.value)}
+                onKeyPress={handleKeyPress}
                 placeholder="Écrivez votre message..."
                 className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-base text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
